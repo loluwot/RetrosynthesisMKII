@@ -5,6 +5,7 @@ Implement [https://doi.org/10.1038/nature25978](https://doi.org/10.1038/nature25
 
 To use:
 Download open-source database of chemical reactions extracted from US patents here: [https://figshare.com/articles/dataset/Chemical_reactions_from_US_patents_1976-Sep2016_/5104873](https://figshare.com/articles/dataset/Chemical_reactions_from_US_patents_1976-Sep2016_/5104873)
+
 Extract 1976_Sep2016_USPTOgrants_smiles.7z into a folder named DATA.
 Run data.py.
 Run multi.py.

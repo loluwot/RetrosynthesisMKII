@@ -60,7 +60,7 @@ for _ in range(10):
             #print(arr)
             if np.array(arr).tostring() not in x_temp:
                 x_train.append(keras.utils.normalize(np.array(arr)))
-                x_temp.append(np.array(arr).tostring())
+                x_temp.add(np.array(arr).tostring())
                 y_train.append(int(b.decode('utf-8')))
             count += len(l)
 
@@ -69,7 +69,7 @@ for _ in range(10):
     #x_test = np.array(x_test)
     #y_test = np.array(y_test)
     print (len(set(x_temp)))
-    model.fit(x_train, y_train, epochs=1, verbose=1)
+    model.fit(x_train, y_train, epochs=2, verbose=1)
     #results = model.evaluate(x_test, y_test, batch_size=32)
     #print("test loss, test acc:", results)
     del x_train, y_train#, x_test, y_test

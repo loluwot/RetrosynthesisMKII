@@ -1,6 +1,7 @@
 import keras
 from operator import add
 from rdkit import Chem
+from rdkit.Chem import Descriptors
 from rdkit.Chem import AllChem
 from rdkit.Chem import Draw
 from keras.datasets import mnist
@@ -14,12 +15,14 @@ from keras.utils import normalize
 import numpy as np
 import pickle
 import os
-#from rdkit import RDLogger
+from rdkit import RDLogger
 from tqdm import tqdm
 import mmap
 import networkx as nx
 from ordered_set import OrderedSet
-
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+RDLogger.DisableLog('rdApp.*')
 reactions = []
 
 with open('../TRAINING/RESULTS2') as f:
@@ -46,6 +49,8 @@ def retrosynthesis_step(smi, topn=10):
     #mol2 = Chem.MolFromSmiles('')
     vecs = AllChem.GetMorganFingerprintAsBitVect(mol, 2)    
     vecs = normalize(np.array(vecs))
+    #print(vecs)
+    #print(vecs.shape)
     res = model.predict(vecs)
     top10 = res.argsort()[0][::-1][:topn]
     #top10=[55]
@@ -75,23 +80,23 @@ def retrosynthesis_step(smi, topn=10):
         rxn2 = '{}>>({})'.format(react, prod)
         rxnrev = '({})>>{}'.format(prod, react)
        # print(rxn, rxn2, rxnrev)
-        rxn = AllChem.ReactionFromSmarts(rxn)
+        rxn = AllChem.ReactionFromSmarts(rxn2)
         if len(rxn.GetReactants()) > 1:
             print('TOO MANY COOKS')
             continue
-        rxn2 = AllChem.ReactionFromSmarts(rxn2)
+        #rxn2 = AllChem.ReactionFromSmarts(rxn2)
         rxnrev = AllChem.ReactionFromSmarts(rxnrev)
         #Chem.SanitizeMol(patt)
         #print(mol.HasSubstructMatch(patt2))
         rxn.Initialize()
-        rxn2.Initialize()
+        #rxn2.Initialize()
         rxnrev.Initialize()
         #print(AllChem.ReactionToSmiles(rxn))
         #print(rxn.IsMoleculeReactant(mol))
         ps = list(rxn.RunReactants((mol,)))
-        ps2 = rxn2.RunReactants((mol,))
+        #ps2 = rxn2.RunReactants((mol,))
         #print(ps2)
-        ps.extend(ps2)
+        #ps.extend(ps2)
         #print(ps)
         for i, p in enumerate(ps):
             #os.mkdir('top{}/entry{}'.format(k, i))
@@ -131,7 +136,7 @@ def retrosynthesis_step(smi, topn=10):
                     break
                     
             if not found:
-                print('SANITY CHECK FAILED')
+                #print('SANITY CHECK FAILED')
                 continue
             rxn1 = []
             for j, pp in enumerate(p):
@@ -142,7 +147,7 @@ def retrosynthesis_step(smi, topn=10):
                     #pp = Chem.MolFromSmiles(Chem.MolToSmiles(pp), sanitize=False)
                     #pp = Chem.RemoveAllHs(pp)
                     #pp.UpdatePropertyCache()
-                    rxn1.append(Chem.MolToSmiles(pp))
+                    rxn1.extend(Chem.MolToSmiles(pp).split('.'))
                     #AllChem.Compute2DCoords(pp)
                     #Draw.MolToFile(pp, 'top{}/entry{}/{}.png'.format(k, i, j), kekulize=False)
                 except KeyboardInterrupt:
@@ -156,36 +161,42 @@ def retrosynthesis_step(smi, topn=10):
     #print(top10)
     return mols
     
-def retrosynthesis (smi, used, depth=0, lim=4, branching=5):
+def retrosynthesis (smi, used, depth=0, lim=5, branching=1, write_tree=None):
     steps = []
     used.add(smi)
-    if depth > lim:
+    #print(Descriptors.HeavyAtomMolWt(Chem.MolFromSmiles(smi, sanitize=False)))
+    if write_tree is not None:
+        write_tree.write(smi + '\n')
+    else:
+        print(smi)
+    if depth > lim or Descriptors.HeavyAtomMolWt(Chem.MolFromSmiles(smi, sanitize=False)) < 100:
         return [smi], used
-    #used = set()
-    #final = []
     results = retrosynthesis_step(smi, topn=branching)
-    for potential in results:
+    for i, potential in enumerate(results):
         rxn = []
         for p in potential:
             if p not in used:
                 #found = True
-                ans, used = retrosynthesis(p, used, depth=depth+1)
+                if write_tree is not None:
+                    write_tree.write('\t'*(depth+1))
+                else:
+                    print('\t'*(depth+1), end='')
+                ans, used = retrosynthesis(p, used, depth=depth+1, lim=lim, branching=branching, write_tree=write_tree)
                 rxn.append(ans)
                 #used.add(p)
+        if i < len(results) - 1:
+            if write_tree is not None:
+                write_tree.write('\t'*(depth+1) + '---------------------------------\n')
+            else:
+                print('\t'*(depth+1) + '---------------------------------')
+            #print('\t'*(depth+1) + '---------------------------------')
         steps.append(rxn)
-        
     steps.append(smi)
-    #current = [(smi, 0)]
-    # while current:
-        # print(current)
-        # first = current.pop()
-        # #used.add(first[0])
-        # results = retrosynthesis_step(first[0], topn=branching)
-        # found = False
         
     
     return steps[::], used
 #print(retrosynthesis_step('CCC(COC(=O)[C@@H](NP(=O)(Oc1ccccc1)OC[C@H]1O[C@@]([C@@H]([C@@H]1O)O)(C#N)c1ccc2n1ncnc2N)C)CC', topn=20))
 used = set()
-for syn in retrosynthesis('CCC(COC(=O)[C@@H](NP(=O)(Oc1ccccc1)OC[C@H]1O[C@@]([C@@H]([C@@H]1O)O)(C#N)c1ccc2n1ncnc2N)C)CC', used):
-    print(syn)
+#write_tree = open('OUTPUT_TREE', 'a')
+retrosynthesis('C1C2=C(C=CC=C2)C2=C1C=CC=C2', used)
+#write_tree.close()

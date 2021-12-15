@@ -69,7 +69,11 @@ outputs = Dense(LIM, activation="softmax")(x)
 model = keras.Model(inputs, outputs)
 model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=['accuracy'])
 
+<<<<<<< HEAD
 model.fit(x_train, y_train, epochs=2, verbose=1)
+=======
+model.fit(x_train, y_train, epochs=3, verbose=1)
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 
 results = model.evaluate(x_test, y_test, batch_size=32)
 print("test loss, test acc:", results)

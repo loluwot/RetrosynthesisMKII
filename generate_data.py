@@ -15,7 +15,11 @@ import traceback
 from mol_utils import *
 import argparse
 from collections import defaultdict
+<<<<<<< HEAD
 import time
+=======
+
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 def get_arguments():
     ap = argparse.ArgumentParser()
     ap.add_argument('-k', '--keep', required=False,
@@ -82,6 +86,7 @@ for DATASET in DATASETS:
     for DFILE in os.listdir(DPATH):
         ds.ParseFromString(gzip.open(DPATH + DFILE, 'rb').read())
         for reaction in tqdm(ds.reactions):
+<<<<<<< HEAD
             rxnstr = get_reaction_smiles(reaction)
             rxnstr = rxnstr.split(' |')[0]
             og_rxn = Reactions.ReactionFromSmarts(rxnstr, useSmiles=True)
@@ -120,6 +125,39 @@ for DATASET in DATASETS:
                 print('ISSUE')
                 traceback.print_exc()
                 continue
+=======
+            try:
+                rxnstr = get_reaction_smiles(reaction)
+                rxnstr = rxnstr.split(' |')[0]
+                og_rxn = Reactions.ReactionFromSmarts(rxnstr, useSmiles=True)
+                preprocessed = preprocessing(rxnstr)
+                processed = process_an_example(preprocessed)
+                # print('PREPROCESSED', preprocessed)
+                rxn_core = Reactions.ReactionFromSmarts(processed)
+                canonical_remap(rxn_core)
+                rxn_core.Initialize()
+                rxn_corestr = Reactions.ReactionToSmiles(rxn_core)
+                rxn_corestr = postprocessing(rxn_corestr)
+                rxn_hashed = HashedReaction(rxn_corestr)
+                if rxn_hashed not in rxn_to_id:
+                    if not args['keepreactions']:
+                        rxn_to_id[rxn_hashed] = counter
+                        counter += 1
+                        # all_reactions.add(rxn_hashed)
+                    else:
+                        # print('ISSUE', rxn_corestr)
+                        continue
+                fingerprint = product_fingerprint(og_rxn)
+                # print('OUT', rxnstr, rxn_corestr, rxn_to_id[rxn_hashed])
+                # input()
+                # NET_SET.write(pickle.dumps(fingerprint) + b'|' + bytes(str(rxn_to_id[rxn_hashed]), encoding='utf-8') + b'\n')
+                DATASET_DICT[rxn_to_id[rxn_hashed]].append(pickle.dumps(fingerprint))
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                continue
+    
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 REACTIONS_FILE = open(TRAINING_PATH + 'REACTIONS', 'a')
 NET_SET = open(TRAINING_PATH + 'NET_SET', 'ab')
 REACTIONS = []

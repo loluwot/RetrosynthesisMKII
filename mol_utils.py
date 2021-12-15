@@ -5,17 +5,29 @@ from rdkit.Chem import rdChemReactions as Reactions
 from rdkit.Chem import rdmolops
 from rdkit.Chem import SaltRemover
 import networkx as nx
+<<<<<<< HEAD
+from generate_retro_templates import *
+from networkx.algorithms.isomorphism import is_isomorphic
+import numpy as np
+import itertools
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
+=======
 
 from networkx.algorithms.isomorphism import is_isomorphic
 import numpy as np
     
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 remover = SaltRemover.SaltRemover()
 
 class HashedReaction:
     def __init__(self, rxn_smarts, idx=0) -> None:
         reactants, products = rxn_smarts.split('>>')
+<<<<<<< HEAD
+=======
         if products[0] == '(' and products[-1] == ')':
             products = products[1:-1]
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
         rxn_smarts = reactants + '>>' + products
         rxn_mols = Reactions.ReactionFromSmarts(rxn_smarts, useSmiles=True)
         
@@ -24,8 +36,11 @@ class HashedReaction:
         self.rxn_mols = canon_rxn(rxn_mols)
         self.rxn_smarts = Reactions.ReactionToSmarts(self.rxn_mols)
         reactants, products = rxn_smarts.split('>>')
+<<<<<<< HEAD
+=======
         if products[0] == '(' and products[-1] == ')':
             products = products[1:-1]
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
         reactants_hash = str(hash(HashedMolSet(reactants)))
         products_hash = str(hash(HashedMolSet(products)))
         self.full_hash = reactants_hash + products_hash
@@ -185,6 +200,58 @@ def is_equivalent(mol1, mol2):
     t1, t2 = topology_from_rdkit(mol1), topology_from_rdkit(mol2)
     return is_isomorphic(t1, t2, node_match=lambda x, y: x['an'] == y['an'], edge_match=lambda x, y: x['order'] == y['order'])
 
+<<<<<<< HEAD
+
+#REMEMBER PREPROCESSING CHANGED TO OUTPUT MULTIPLE REACTIONS IF MULTIPLE PRODUCTS
+
+def preprocessing(rxnstr):
+    try:
+        rxn = Reactions.ReactionFromSmarts(rxnstr, useSmiles=True)
+        rxn.RemoveUnmappedProductTemplates()
+        rxn.RemoveUnmappedReactantTemplates()
+        rxn.RemoveAgentTemplates()
+        rxnsmi = Reactions.ReactionToSmiles(rxn)
+        # print(rxnsmi, ':::::')
+        reactants_str, products_str = rxnsmi.split('>>')
+        reactants, products = [[rdmolops.RemoveHs(reactant, sanitize=False, updateExplicitCount=True) for reactant in reactants] for reactants in [rxn.GetReactants(), rxn.GetProducts()]]
+        
+        #arbitrary atom count filter used to remove random remaining small molecules
+        product_atom_count = sum(map(lambda x: x.GetNumAtoms(), products))
+        if product_atom_count < 3:
+            return []
+        #removing trivial common elements (yes this theoretically eliminates reactions like alkene metathesis but that will be dealt with later)
+        reactants_h, products_h = HashedMolSet(reactants_str), HashedMolSet(products_str)
+        reactants_set, products_set = set(reactants_h.canon_mols), set(products_h.canon_mols)
+        reactants_set, products_set = reactants_set.difference(products_set), products_set.difference(reactants_set)
+        reactants_h.canon_mols, products_h.canon_mols = list(reactants_set), list(products_set)
+        reactants_h.update()
+        products_h.update()
+        reactants_str = str(reactants_h)
+        products_str = str(products_h)
+        if '.' in products_str:
+            product_list = products_str.split('.')
+            return itertools.chain.from_iterable(map(lambda x: preprocessing(f'{reactants_str}>>{x}'), product_list)) #multiple product case, ignore
+        if len(reactants) == 0 or len(products) == 0:
+            return []
+        return [f'{reactants_str}>>{products_str}'] 
+
+    except KeyboardInterrupt:
+        import sys
+        sys.exit(0)
+    except Exception as e:
+        print('ISSUE')
+        return []
+    # parsed_reaction = Reactions.ChemicalReaction()
+    # for reactant in reactants:
+    #     parsed_reaction.AddReactantTemplate(reactant)
+    # for product in products:
+    #     parsed_reaction.AddProductTemplate(product)
+    
+    
+    # parsed_reaction.RemoveAgentTemplates()
+
+    # return Reactions.ReactionToSmarts(parsed_reaction)
+=======
 def preprocessing(rxnstr):
     rxn = Reactions.ReactionFromSmarts(rxnstr, useSmiles=True)
     rxn.RemoveAgentTemplates()
@@ -207,6 +274,7 @@ def preprocessing(rxnstr):
     parsed_reaction.RemoveAgentTemplates()
 
     return Reactions.ReactionToSmarts(parsed_reaction)
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 
 def postprocessing(rxnstr):
     reactants, products = map(lambda x: Chem.MolToSmiles(process_mol(Chem.MolFromSmiles(x, sanitize=False))), rxnstr.split('>>'))
@@ -217,13 +285,37 @@ def postprocessing(rxnstr):
     reactants_set, products_set = reactants_set.difference(products_set), products_set.difference(reactants_set)
     reactants_h.canon_mols = list(reactants_set)
     products_h.canon_mols = list(products_set)
+<<<<<<< HEAD
+    reactants_h.update()
+    products_h.update()
+=======
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
     reactants = str(reactants_h)
     products = str(products_h)
     if '.' in products:
         return None #multiple product case returns somehow, ignore
+<<<<<<< HEAD
+    return f'{reactants}>>{products}'
+
+def corify(rxnstr):
+    try:
+        processed = process_an_example(rxnstr)
+        rxn_core = Reactions.ReactionFromSmarts(processed)
+        canonical_remap(rxn_core)
+        rxn_core.Initialize()
+        rxn_corestr = Reactions.ReactionToSmiles(rxn_core)
+        rxn_corestr = postprocessing(rxn_corestr)
+        return rxn_corestr
+    except KeyboardInterrupt:
+        import sys
+        sys.exit(0)
+    except:
+        return None
+=======
     if len(reactants) == 0 or len(products) == 0:
         return None
     return f'{reactants}>>{products}'
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 
 def sanity_check(rxnstr, mol):
     rxn = Reactions.ReactionFromSmarts(rxnstr)

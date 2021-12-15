@@ -15,7 +15,11 @@ import traceback
 from mol_utils import *
 import argparse
 from collections import defaultdict
+<<<<<<< HEAD
+import time
+=======
 
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 def get_arguments():
     ap = argparse.ArgumentParser()
     ap.add_argument('-k', '--keep', required=False,
@@ -82,6 +86,46 @@ for DATASET in DATASETS:
     for DFILE in os.listdir(DPATH):
         ds.ParseFromString(gzip.open(DPATH + DFILE, 'rb').read())
         for reaction in tqdm(ds.reactions):
+<<<<<<< HEAD
+            rxnstr = get_reaction_smiles(reaction)
+            rxnstr = rxnstr.split(' |')[0]
+            og_rxn = Reactions.ReactionFromSmarts(rxnstr, useSmiles=True)
+            # print(rxnstr, '------------------')
+            try:
+                for preprocessed in preprocessing(rxnstr):
+                    # print('POS', preprocessed)
+                    try:
+                        # start_time = time.time()
+                        # processed = process_an_example(preprocessed)
+                        # # print(time.time() - start_time)
+                        # rxn_core = Reactions.ReactionFromSmarts(processed)
+                        # canonical_remap(rxn_core)
+                        # rxn_core.Initialize()
+                        # rxn_corestr = Reactions.ReactionToSmiles(rxn_core)
+                        # rxn_corestr = postprocessing(rxn_corestr)
+                        rxn_corestr = corify(preprocessed)
+                        rxn_hashed = HashedReaction(rxn_corestr)
+                        if rxn_hashed not in rxn_to_id:
+                            if not args['keepreactions']:
+                                rxn_to_id[rxn_hashed] = counter
+                                counter += 1
+                            else:
+                                continue
+                        fingerprint = product_fingerprint(og_rxn)
+                        DATASET_DICT[rxn_to_id[rxn_hashed]].append(pickle.dumps(fingerprint))
+                    except KeyboardInterrupt:
+                        import sys
+                        sys.exit(0)
+                    except Exception as e:
+                        continue
+            except KeyboardInterrupt:
+                import sys
+                sys.exit(0)
+            except Exception as e:
+                print('ISSUE')
+                traceback.print_exc()
+                continue
+=======
             try:
                 rxnstr = get_reaction_smiles(reaction)
                 rxnstr = rxnstr.split(' |')[0]
@@ -113,6 +157,7 @@ for DATASET in DATASETS:
             except Exception as e:
                 continue
     
+>>>>>>> 55cf01f8d477ca7fea3c995ce0bf2369b82606fc
 REACTIONS_FILE = open(TRAINING_PATH + 'REACTIONS', 'a')
 NET_SET = open(TRAINING_PATH + 'NET_SET', 'ab')
 REACTIONS = []

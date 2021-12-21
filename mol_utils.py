@@ -201,7 +201,7 @@ def preprocessing(rxnstr):
         product_atom_count = sum(map(lambda x: x.GetNumAtoms(), products))
         if product_atom_count < 3:
             return []
-        #removing trivial common elements (yes this theoretically eliminates reactions like alkene metathesis but that will be dealt with later)
+        #removing trivial common elements (this eliminates reactions like alkene metathesis but that will be dealt with later)
         reactants_h, products_h = HashedMolSet(reactants_str), HashedMolSet(products_str)
         reactants_set, products_set = set(reactants_h.canon_mols), set(products_h.canon_mols)
         reactants_set, products_set = reactants_set.difference(products_set), products_set.difference(reactants_set)

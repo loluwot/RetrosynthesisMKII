@@ -16,6 +16,7 @@ from mol_utils import *
 import argparse
 from collections import defaultdict
 import time
+from utils import *
 def get_arguments():
     ap = argparse.ArgumentParser()
     ap.add_argument('-k', '--keep', required=False,
@@ -38,23 +39,23 @@ lg = rkl.logger()
 lg.setLevel(rkl.ERROR)
 rkrb.DisableLog('rdApp.error')    
 
-TRAINING_PATH = './TRAINING_DATA/'
-# TEST_RATIO = 0.25
+# TRAINING_PATH = './TRAINING_DATA/'
+# # TEST_RATIO = 0.25
 
-ROLE_TYPES = reaction_pb2.ReactionRole.ReactionRoleType
-IDENTIFIER_TYPES = reaction_pb2.CompoundIdentifier.IdentifierType
+# ROLE_TYPES = reaction_pb2.ReactionRole.ReactionRoleType
+# IDENTIFIER_TYPES = reaction_pb2.CompoundIdentifier.IdentifierType
 
-def get_smiles(compound):
-    for identifier in compound.identifiers:
-        if identifier.type == IDENTIFIER_TYPES.SMILES:
-            return identifier.value
-    return -1
+# def get_smiles(compound):
+#     for identifier in compound.identifiers:
+#         if identifier.type == IDENTIFIER_TYPES.SMILES:
+#             return identifier.value
+#     return -1
 
-def get_reaction_smiles(reaction):
-    for identifier in reaction.identifiers:
-        if identifier.type == reaction_pb2.ReactionIdentifier.IdentifierType.REACTION_CXSMILES:
-            return identifier.value
-    return -1
+# def get_reaction_smiles(reaction):
+#     for identifier in reaction.identifiers:
+#         if identifier.type == reaction_pb2.ReactionIdentifier.IdentifierType.REACTION_CXSMILES:
+#             return identifier.value
+#     return -1
 
 counter = 0
 # all_reactions = set()
@@ -84,20 +85,12 @@ for DATASET in DATASETS:
         for reaction in tqdm(ds.reactions):
             rxnstr = get_reaction_smiles(reaction)
             rxnstr = rxnstr.split(' |')[0]
-            og_rxn = Reactions.ReactionFromSmarts(rxnstr, useSmiles=True)
             # print(rxnstr, '------------------')
             try:
                 for preprocessed in preprocessing(rxnstr):
                     # print('POS', preprocessed)
                     try:
-                        # start_time = time.time()
-                        # processed = process_an_example(preprocessed)
-                        # # print(time.time() - start_time)
-                        # rxn_core = Reactions.ReactionFromSmarts(processed)
-                        # canonical_remap(rxn_core)
-                        # rxn_core.Initialize()
-                        # rxn_corestr = Reactions.ReactionToSmiles(rxn_core)
-                        # rxn_corestr = postprocessing(rxn_corestr)
+                        mini_rxn = Reactions.ReactionFromSmarts(preprocessed, useSmiles=True)
                         rxn_corestr = corify(preprocessed)
                         rxn_hashed = HashedReaction(rxn_corestr)
                         if rxn_hashed not in rxn_to_id:
@@ -106,7 +99,7 @@ for DATASET in DATASETS:
                                 counter += 1
                             else:
                                 continue
-                        fingerprint = product_fingerprint(og_rxn)
+                        fingerprint = product_fingerprint(mini_rxn)
                         DATASET_DICT[rxn_to_id[rxn_hashed]].append(pickle.dumps(fingerprint))
                     except KeyboardInterrupt:
                         import sys

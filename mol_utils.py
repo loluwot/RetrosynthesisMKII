@@ -10,13 +10,15 @@ from networkx.algorithms.isomorphism import is_isomorphic
 import numpy as np
 import itertools
 from rdkit import RDLogger
+import traceback
+
+
 RDLogger.DisableLog('rdApp.*')
 remover = SaltRemover.SaltRemover()
 
 class HashedReaction:
     def __init__(self, rxn_smarts, idx=0) -> None:
         reactants, products = rxn_smarts.split('>>')
-        rxn_smarts = reactants + '>>' + products
         rxn_mols = Reactions.ReactionFromSmarts(rxn_smarts, useSmiles=True)
         
         self.real_smarts = rxn_smarts
@@ -98,8 +100,8 @@ def process_mol(mol):
 def canon_mol(mol):
     smi = Chem.MolToSmiles(mol)
     molcopy = Chem.MolFromSmiles(smi, sanitize=False)
-    for atom in molcopy.GetAtoms():
-        atom.ClearProp('molAtomMapNumber')
+    # for atom in molcopy.GetAtoms():
+    #     atom.ClearProp('molAtomMapNumber')
     molcopy = rdmolops.RemoveHs(molcopy, sanitize=False)
     return molcopy
     
@@ -117,7 +119,8 @@ def canon_rxn(rxn):
 def topology_from_rdkit(mol):
     topology = nx.Graph()
     for atom in mol.GetAtoms():
-        topology.add_node(atom.GetIdx(), an = str(atom.GetAtomicNum()))
+        anstr = f"{atom.GetAtomicNum()}{atom.GetProp('molAtomMapNumber')}" if atom.HasProp('molAtomMapNumber') else f"{atom.GetAtomicNum()}"
+        topology.add_node(atom.GetIdx(), an=anstr)
         for bond in atom.GetBonds():
             topology.add_edge(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), order=str(bond.GetBondTypeAsDouble()))
     return topology
@@ -195,7 +198,7 @@ def preprocessing(rxnstr):
         rxnsmi = Reactions.ReactionToSmiles(rxn)
         # print(rxnsmi, ':::::')
         reactants_str, products_str = rxnsmi.split('>>')
-        reactants, products = [[rdmolops.RemoveHs(reactant, sanitize=False, updateExplicitCount=True) for reactant in reactants] for reactants in [rxn.GetReactants(), rxn.GetProducts()]]
+        reactants, products = [reactants for reactants in rxn.GetReactants()], [products for products in rxn.GetProducts()]
         
         #arbitrary atom count filter used to remove random remaining small molecules
         product_atom_count = sum(map(lambda x: x.GetNumAtoms(), products))
@@ -210,17 +213,18 @@ def preprocessing(rxnstr):
         products_h.update()
         reactants_str = str(reactants_h)
         products_str = str(products_h)
+        if len(reactants_str) == 0 or len(products_str) == 0:
+            return []
         if '.' in products_str:
             product_list = products_str.split('.')
             return itertools.chain.from_iterable(map(lambda x: preprocessing(f'{reactants_str}>>{x}'), product_list)) #multiple product case, ignore
-        if len(reactants) == 0 or len(products) == 0:
-            return []
         return [f'{reactants_str}>>{products_str}'] 
 
     except KeyboardInterrupt:
         import sys
         sys.exit(0)
     except Exception as e:
+        # traceback.print_exc()
         print('ISSUE')
         return []
     # parsed_reaction = Reactions.ChemicalReaction()
@@ -251,19 +255,26 @@ def postprocessing(rxnstr):
         return None #multiple product case returns somehow, ignore
     return f'{reactants}>>{products}'
 
-def corify(rxnstr):
+def corify(rxnstr, smarts=False):
     try:
-        processed = process_an_example(rxnstr)
+        processed = process_an_example(rxnstr)#, super_general=True)
+        #print('PREPOSTPROCESSING1', processed)
         rxn_core = Reactions.ReactionFromSmarts(processed)
         canonical_remap(rxn_core)
         rxn_core.Initialize()
         rxn_corestr = Reactions.ReactionToSmiles(rxn_core)
+        #print('PREPOSTPROCESSING2', rxn_corestr)
+        #print('--------------------------------------------')
         rxn_corestr = postprocessing(rxn_corestr)
-        return rxn_corestr
+        if smarts:
+            return rxn_corestr, processed
+        else:
+            return rxn_corestr
     except KeyboardInterrupt:
         import sys
         sys.exit(0)
     except:
+        # traceback.print_exc()
         return None
 
 def sanity_check(rxnstr, mol):
@@ -290,22 +301,35 @@ def sanity_check(rxnstr, mol):
     net_res = [x.mols for x in net_res]
     return net_res
 
-def product_fingerprint(rxn):
-    net_fingerprint = [0]*2048
-    for product in rxn.GetProducts():
-        product.UpdatePropertyCache()
-        Chem.GetSymmSSSR(product)
-        finger = AllChem.GetMorganFingerprintAsBitVect(product, 2)
+def fingerprint(mol_set, nbits=2048):
+    net_fingerprint = [0]*nbits
+    for mol in mol_set:
+        mol.UpdatePropertyCache()
+        Chem.GetSymmSSSR(mol)
+        finger = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=nbits)
         net_fingerprint = list(map(lambda x, y: x + y, net_fingerprint, finger))
-    # print('CORRECT', net_fingerprint)
     return net_fingerprint
-    # if max(net_fingerprint) < 10:
-    #     base = max(net_fingerprint) + 1
-    #     val = int(''.join(map(str, net_fingerprint)), base=base)
-    #     return f'{val} {base}'
-    # else:
-    #     return None
-    
+
+def product_fingerprint(rxn, nbits=2048):
+    return fingerprint([product for product in rxn.GetProducts()], nbits=nbits)
+
+def reactant_fingerprint(rxn, nbits=2048):
+    return fingerprint([reactant for reactant in rxn.GetReactants()], nbits=nbits)
+
+def forward_run(rxnstr, reactants):
+    reactants_s, products = rxnstr.split('>>')
+    # if products[0] == '(' and products[-1] == ')':
+    #     products = products[1:-1]
+    # reactants_s, products = map(lambda x: Chem.MolToSmiles(process_mol(Chem.MolFromSmiles(x, sanitize=False))), [reactants_s, products])
+    rxn = Reactions.ReactionFromSmarts(f'{reactants_s}>>{products}', useSmiles=True)
+    try:
+        split_results = list(rxn.RunReactants(reactants))
+    except:
+        # print(traceback.format_exc(), rxnstr, len(reactants))
+        # input()
+        return []
+    return split_results    
+
 # def get_fingerprint_from_str(s):
 #     val, base = map(int, s.split())
 #     def base_str(n,base):
@@ -315,3 +339,4 @@ def product_fingerprint(rxn):
 #         else:
 #             return base_str(n//base,base) + convert[n%base]
 #     return map(int, list(base_str(val, base).zfill(2048)))
+

@@ -23,28 +23,42 @@ from mol_utils import *
 
 reactions = []
 model = keras.models.load_model('model')
+inscope_model = keras.models.load_model('inscope_model')
 with open('TRAINING_DATA/REACTIONS') as f:
     for l in f:
         reactions.append(l.strip())
 
+
+def filter_results(results, mol):
+    product_f = fingerprint([mol])
+    reactant_fingerprints = [(i, fingerprint([Chem.MolFromSmiles(x) for x in result])) for i, result in enumerate(results)]
+    def is_valid(f1, f2):
+        f1s = np.array(f1).reshape((1, 1, 2048))
+        f2s = np.array(f2).reshape((1, 1, 2048))
+        res = inscope_model.predict({'reactant':f1s, 'product':f2s})[0][0][0]
+        print(res)
+        return res > 0.02   
+    filtered = list(filter(lambda x: is_valid(x[1], product_f), reactant_fingerprints))
+    if len(filtered) == 0:
+        return []
+    valid_indices, _ = zip(*filtered)
+    return [results[i] for i in valid_indices]
+
+
 def sanity_check(rxnstr, mol):
-    rxn = Reactions.ReactionFromSmarts(rxnstr)
+    # rxn = Reactions.ReactionFromSmarts(rxnstr)
     hashed_mol = HashedMol(Chem.MolToSmiles(mol))
-    print('RXNSTR', rxnstr)
     reactants, products = rxnstr.split('>>')
     if products[0] == '(' and products[-1] == ')':
         products = products[1:-1]
     reactants, products = map(lambda x: Chem.MolToSmiles(process_mol(Chem.MolFromSmiles(x, sanitize=False))), [reactants, products])
-    # if '.' in reactants:
-    #     return []
     temp = [f'{products}>>({reactants})', f'({reactants})>>{products}']
     prxn, prxnrev = map(lambda x: Reactions.ReactionFromSmarts(x, useSmiles=True), temp)
-    prxn.Initialize()
-    prxnrev.Initialize()
+    # prxn.Initialize()
+    # prxnrev.Initialize()
     try:
         split_results = list(prxn.RunReactants((mol,)))
     except:
-        # print('ISSUE')
         return []
     # print('SPLIT RESULTS', list(map(lambda x: Chem.MolToSmiles(x[0]), split_results)))
     net_res = set()
@@ -61,21 +75,17 @@ def sanity_check(rxnstr, mol):
         if hashed_mol in hashed_res:
             if Chem.MolFromSmiles(Chem.MolToSmiles(res[0])) != None:
                 net_res.add(HashedMolSet(Chem.MolToSmiles(res[0])))
-            # return True
-    # print(net_res)
     net_res = [x.mols for x in net_res]
-    # print(net_res)
-    # net_res = list(map(lambda x: x.molstr.split('.'), net_res))
-    return net_res
+    return filter_results(net_res, mol)
 
-def get_top_n(smi, topn=15):
+def get_top_n(smi, topn=15, nbits=2048):
     mol = Chem.MolFromSmiles(smi)
     mol.UpdatePropertyCache()
-    vecs = AllChem.GetMorganFingerprintAsBitVect(mol, 2)    
-    vecs = normalize(np.array(vecs))
+    vecs = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=nbits)    
+    # vecs = 
     # print(vecs)
-    vecs = np.expand_dims(vecs, axis=0)
-    res = model.predict([vecs])
+    vecs = normalize(np.array(vecs))
+    res = model.predict(np.asarray([vecs]))
     topres = res.argsort()[0][0][::-1][:topn*5]
     topres = list(map(lambda x: HashedReaction(reactions[x], idx=x), topres))
     topres = OrderedSet(topres)
@@ -83,11 +93,13 @@ def get_top_n(smi, topn=15):
     return ftopres
 
     
+
 # print(reactions[567])
 # print(reactions[280])
 #HARD
 # print(get_top_n('CCC(COC(=O)[C@@H](NP(=O)(Oc1ccccc1)OC[C@H]1O[C@@]([C@@H]([C@@H]1O)O)(C#N)c1ccc2n1ncnc2N)C)CC'))
 #EASY
-print(get_top_n('FC1=CC=C(C=C1)C1=CC=C(C=O)C=C1'))
+res = get_top_n('FC1=CC=C(C=C1)C1=CC=C(C=O)C=C1', nbits=2048)
+print(res)
 # MEDIUM
 # print(get_top_n('CCN1C(=O)COc2ccc(CN3CCN(CCOc4cccc5nc(C)ccc45)CC3)cc21'))

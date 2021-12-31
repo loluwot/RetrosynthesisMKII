@@ -3,4 +3,11 @@ full_reaxys_model_1024bool
 ord_*
 ord-data
 TRAINING_DATA/NET_SET
+TRAINING_DATA/INSCOPE_DATA*
 test*.smiles
+ISSUE*
+standalone_model_numpy.py
+*.smarts
+tester.py
+inscope_model
+model

@@ -89,7 +89,7 @@ y_test = np.array(y_test)
 model = keras.Model(inputs, outputs) 
 model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=['accuracy'])
 
-# model.fit(x_train, y_train, epochs=2, verbose=1)
+
 model.fit_generator(training_generator, epochs=2)
 results = model.evaluate(x_test, y_test, batch_size=32)
 print("test loss, test acc:", results)

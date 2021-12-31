@@ -112,4 +112,9 @@ for batchid, filenames in enumerate([total_files[i*BATCH_SIZE:min((i+1)*BATCH_SI
 # DATASET_DICT = functools.reduce(lambda x, y: defaultdict(list, [(idx, x[idx] + y[idx]) for idx in set(y.keys()).union(set(x.keys())) if idx in rxn_to_id]), all_datapoints)
 # NEW_DATASET = [case + b'|' + bytes(str(rxn_to_id[idx]), encoding='utf-8') + b'\n' for idx, data in DATASET_DICT.items() for case in data]
 # print(NEW_DATASET)
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 9ddfb02e408544bfbeb179bdcbe024353ec9870a
 print('TOOK:', time.time() - start_time)

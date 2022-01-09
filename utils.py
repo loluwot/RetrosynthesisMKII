@@ -1,6 +1,7 @@
 from ord_schema.proto import dataset_pb2
 from ord_schema.proto import reaction_pb2 
 import gzip
+from mol_utils import *
 TRAINING_PATH = './TRAINING_DATA/'
 
 ROLE_TYPES = reaction_pb2.ReactionRole.ReactionRoleType
@@ -22,6 +23,6 @@ def file_to_rxns(file, additional_info=False):
     ds = dataset_pb2.Dataset()
     ds.ParseFromString(gzip.open(file, 'rb').read())
     if additional_info:
-        return list(zip(ds.reactions, [file]*len(ds.reactions)), range(len(ds.reactions)))
+        return list(zip(ds.reactions, [file]*len(ds.reactions), range(len(ds.reactions)), [get_reaction_smiles(reaction) for reaction in ds.reactions]))
     else:
         return ds.reactions

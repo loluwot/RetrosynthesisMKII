@@ -1,3 +1,4 @@
+from re import template
 from tensorflow import keras
 from operator import add
 from tensorflow.keras.datasets import mnist
@@ -21,15 +22,17 @@ def get_arguments():
     ap = argparse.ArgumentParser()
     ap.add_argument('-b', '--bitsize',
                     help='Size of Morgan Fingerprint', required=False,type=int, default=2048)
+    ap.add_argument('-e', '--epochs',
+                    help='Number of epochs', required=False,type=int, default=5)
     args = vars(ap.parse_args())
     return args
 
 args = get_arguments()
-
+BITSIZE = args['bitsize']
 TEST_RATIO = 0.125
 LIM = len(open('TRAINING_DATA/REACTIONS', 'rb').readlines())
 elu_alpha = 0.1
-inputs = keras.Input(shape=(1, args['bitsize']))
+inputs = keras.Input(shape=(1, BITSIZE))
 #inputs = keras.BatchNormalization()(inputs)
 x = Dense(512, kernel_initializer='he_normal')(inputs)
 x = ELU(alpha=elu_alpha)(x)
@@ -50,15 +53,16 @@ with open('TRAINING_DATA/NET_SET', 'rb') as fp:
             a, b = l.split(b'|')
             arr = pickle.loads(a)
             #print(arr)
-            if tuple(arr) not in x_temp and int(b.decode('utf-8')) < LIM:
-                if random.random() > TEST_RATIO:
-                    x_train.append(normalize(np.array(arr)))
-                    x_temp.add(tuple(arr))
-                    y_train.append(np.array([int(b.decode('utf-8'))]))
-                else:
-                    x_test.append(normalize(np.array(arr)))
-                    x_temp.add(tuple(arr))
-                    y_test.append(int(b.decode('utf-8')))
+            # if tuple(arr) not in x_temp:
+            if random.random() > TEST_RATIO:
+                x_train.append(np.log1p(np.array(arr)).reshape((1, 1, BITSIZE)))
+                x_temp.add(tuple(arr))
+                y_train.append(np.array([int(b.decode('utf-8'))]))
+            else:
+                x_test.append(np.log1p(np.array(arr)).reshape((1, 1, BITSIZE)))
+                x_temp.add(tuple(arr))
+                y_test.append(int(b.decode('utf-8')))
+
         except KeyboardInterrupt:
             import sys
             sys.exit(0)
@@ -76,9 +80,17 @@ with open('TRAINING_DATA/NET_SET', 'rb') as fp:
 #             y_test.append(int(b.decode('utf-8')))
 
 print(len(x_train))
+def batched_generator(data, batch_size=32):
+    temp_data = [[], []]
+    for i, point in enumerate(data):
+        if i % batch_size == 0 and i != 0:
+            temp_data = [np.array(a) for a in temp_data]
+            yield [temp_data[0]], temp_data[1]
+            temp_data = [[], []]
+        for ii in range(2):
+            temp_data[ii].append(point[ii][0])
 
-training_generator = iter(random.sample(list(zip(x_train, y_train)), len(x_train)))
-
+# training_generator = iter(random.sample(list(zip(x_train, y_train)), len(x_train)))
 # x_train = np.array(x_train)
 # y_train = np.array(y_train)
 x_test = np.array(x_test)
@@ -88,14 +100,11 @@ y_test = np.array(y_test)
 
 model = keras.Model(inputs, outputs) 
 model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=['accuracy'])
+EPOCHS = args['epochs']
+for _ in range(EPOCHS):
+    training_generator = batched_generator(random.sample(list(zip(x_train, y_train)), len(x_train)))
+    model.fit_generator(training_generator, epochs=1)
 
-<<<<<<< HEAD:train.py
-model.fit(x_train, y_train, epochs=2, verbose=1)
-
-=======
->>>>>>> master:train_retro.py
-
-model.fit_generator(training_generator, epochs=2)
 results = model.evaluate(x_test, y_test, batch_size=32)
 print("test loss, test acc:", results)
 

@@ -8,6 +8,8 @@ test*.smiles
 ISSUE*
 standalone_model_numpy.py
 *.smarts
-tester.py
-inscope_model
+tester*.py
+inscope_model*
 model
+model1
+test_model.py

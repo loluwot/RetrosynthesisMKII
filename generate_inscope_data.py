@@ -34,7 +34,7 @@ def get_arguments():
     return args
 
 args = get_arguments()
-
+DELIMITER = b'||'
 DATASETS = args['datasets']
 if args['datasets'][0] == 'all':
     DATASETS = os.listdir('ord-data/data/')
@@ -52,21 +52,25 @@ def process_rxn(reaction):
     # print(rxnstr)
     rxnstr = rxnstr.split(' |')[0]
     for mini_rxn in preprocessing(rxnstr):
+        # reactant_s, product_s = mini_rxn.split('>>')
         og_rxn = Reactions.ReactionFromSmarts(mini_rxn, useSmiles=True)
-        cored = corify(mini_rxn)
+        cored, cored_s = corify(mini_rxn, smarts=True)
         if cored is None or len(list(filter(lambda x: len(x.strip()) != 0, cored.split('>>')))) < 2:
             continue
         try:
-            r_finger = reactant_fingerprint(og_rxn)
-            p_finger = product_fingerprint(og_rxn)
-            potential_products = forward_run(cored, [reactant for reactant in og_rxn.GetReactants()])
+            # agents = get_agents(rxnstr)
+            r_finger = reaction_fingerprint(mini_rxn, [])
+            p_finger = product_fingerprint(mini_rxn)
+            potential_products = forward_run(cored_s, [reactant for reactant in og_rxn.GetReactants()], use_smiles=False)
+            molset = HashedMolSet('.'.join([Chem.MolToSmiles(x[0]) for x in potential_products]))
+            potential_products = [[Chem.MolFromSmiles(x.molstr, sanitize=False)] for x in molset.canon_mols]
             # print(len(potential_products))
-            data_points += [b','.join([pickle.dumps(r_finger), pickle.dumps(fingerprint(p)), b'0']) + b'\n' for p in potential_products if fingerprint(p) != p_finger] + [b','.join([pickle.dumps(r_finger), pickle.dumps(p_finger), b'1']) + b'\n']
-            
+            data_points += [DELIMITER.join([pickle.dumps(r_finger), pickle.dumps(fingerprint(p)), b'0']) + b'\n' for p in potential_products if fingerprint(p) != p_finger] + [DELIMITER.join([pickle.dumps(r_finger), pickle.dumps(p_finger), b'1']) + b'\n']
         except KeyboardInterrupt:
             import sys
             sys.exit(0)
         except:
+            # print(traceback.format_exc())
             continue
     # print(type(data_points))
     return data_points
@@ -87,10 +91,10 @@ for batchid, filenames in enumerate([total_files[i*BATCH_SIZE:min((i+1)*BATCH_SI
     # print([type(datapoint) for datapoint in all_datapoints])
     datapoints = list(itertools.chain.from_iterable(all_datapoints))
     random.shuffle(datapoints)
-    B_SIZE = (len(datapoints) - 1)//N_BATCHES + 1
+    # B_SIZE = (len(datapoints) - 1)//N_BATCHES + 1
     for i in range(N_BATCHES):
         INSCOPE_FILE = open(TRAINING_PATH + f'INSCOPE_DATA{i}', 'ab')
-        INSCOPE_FILE.writelines(datapoints[B_SIZE*i : min(len(datapoints), B_SIZE*(i+1))])
+        INSCOPE_FILE.writelines(datapoints[i::N_BATCHES])
         # # for datapoints in all_datapoints:
         # df = pd.DataFrame(datapoints)
         # df.to_csv(INSCOPE_FILE, header=False)

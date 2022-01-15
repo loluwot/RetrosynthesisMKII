@@ -31,6 +31,9 @@ def get_arguments():
                     help='Number of occurences before reaction is defined as valid', required=False, type=int, default=10)
     ap.add_argument('-k', '--keep',
                     help='Keep current reactions', action='store_true',required=False, default=False)
+    ap.add_argument('-s', '--simple',
+                    help='Use simple templates', action='store_true',required=False, default=False)
+    
     args = vars(ap.parse_args())
     return args
 
@@ -72,10 +75,6 @@ def total_reactions(file_names):
         del frxn
 
 
-
-
-
-
 # total_reactions = list(itertools.chain.from_iterable(map(lambda x: file_to_rxns(x, additional_info=True), total_files)))
 # print('Loaded all data into memory')
 
@@ -89,7 +88,7 @@ def process_rxn(reaction):
     for preprocessed in preprocessing(rxnstr):
         # print('PREPROCESSED', preprocessed, '-------------------')
         try:
-            rxn_corestr, smarts_str = corify(preprocessed, smarts=True)
+            rxn_corestr, smarts_str = corify(preprocessed, smarts=True, simple=args['simple'])
             if len(list(filter(lambda x: len(x.strip()) != 0, rxn_corestr.split('>>')))) < 2:
                 #print('INCOMPLETE', preprocessed, rxn_corestr)
                 continue
@@ -114,19 +113,19 @@ disallowed = set()
 KEEP = args['keep']
 
 if KEEP:
-    for l in open(TRAINING_PATH + 'REACTIONS', 'r'):
+    for l in open(TRAINING_PATH + f'REACTIONS{"_SIMPLE" if args["simple"] else ""}', 'r'):
         disallowed.add(l.strip())
 else:
-    open(TRAINING_PATH + 'REACTIONS', 'w').write('')
-    open(TRAINING_PATH + 'REACTIONS_ADDITIONAL', 'w').write('')
+    open(TRAINING_PATH + f'REACTIONS{"_SIMPLE" if args["simple"] else ""}', 'w').write('')
+    open(TRAINING_PATH + f'REACTIONS_ADDITIONAL{"_SIMPLE" if args["simple"] else ""}', 'w').write('')
     
 
 for all_canon_l in all_canon:
     for rxn, *additional_info in all_canon_l:
         if not KEEP or rxn not in disallowed:
             DATASET_DICT[rxn] += 1
-            if rxn not in EXAMPLE_REACTION:
-                EXAMPLE_REACTION[rxn] = list(map(str, additional_info))
+            # if rxn not in EXAMPLE_REACTION:
+            EXAMPLE_REACTION[rxn] = list(map(str, additional_info))
 
 FILTERED_RXNS = list(filter(lambda x: DATASET_DICT[x] >= args['number'], DATASET_DICT.keys()))
 # REACTIONS = map(lambda x: x.real_smarts+'\n', FILTERED_RXNS)
@@ -135,7 +134,7 @@ ADDITIONAL = map(lambda x: ','.join(EXAMPLE_REACTION[x]) + '\n', FILTERED_RXNS)
 
 # REACTIONS = [rxn + '\n' for rxn in REACTIONS]
 
-REACTIONS_FILE = open(TRAINING_PATH + 'REACTIONS', 'a')
+REACTIONS_FILE = open(TRAINING_PATH + f'REACTIONS{"_SIMPLE" if args["simple"] else ""}', 'a')
 REACTIONS_FILE.writelines(REACTIONS)
-ADDITIONAL_FILE = open(TRAINING_PATH + 'REACTIONS_ADDITIONAL', 'a')
+ADDITIONAL_FILE = open(TRAINING_PATH + f'REACTIONS_ADDITIONAL{"_SIMPLE" if args["simple"] else ""}', 'a')
 ADDITIONAL_FILE.writelines(ADDITIONAL)

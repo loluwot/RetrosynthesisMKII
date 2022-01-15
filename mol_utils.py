@@ -267,9 +267,9 @@ def smarts_to_smiles(smarts):
     rxn_corestr = postprocessing(rxn_corestr)
     return rxn_corestr
 
-def corify(rxnstr, smarts=False):
+def corify(rxnstr, smarts=False, simple=False):
     try:
-        processed = process_an_example(rxnstr)#, super_general=True)
+        processed = process_an_example(rxnstr, super_general=simple)
         #print('PREPOSTPROCESSING1', processed)
         rxn_corestr = smarts_to_smiles(processed)
         if smarts:
@@ -339,7 +339,7 @@ def forward_run(rxnstr, reactants, use_smiles = True, one_product=False):
     try:
         split_results = list(rxn.RunReactant(merged_reactants, 0))
     except:
-        # traceback.print_exc()
+        traceback.print_exc()
         return []   
     return split_results    
 

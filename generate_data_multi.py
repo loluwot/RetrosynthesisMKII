@@ -23,7 +23,8 @@ import time
 from utils import *
 import math
 import pandas
-
+import csv
+import base64
 def get_arguments():
     ap = argparse.ArgumentParser()
     ap.add_argument('-k', '--keep', required=False,
@@ -35,6 +36,11 @@ def get_arguments():
                     help='Size of Morgan Fingerprint', required=False,type=int, default=2048)
     ap.add_argument('-n', '--batchsize',
                     help='Size of batched datasets', required=False,type=int, default=10)
+    ap.add_argument('-a', '--nbatches',
+                    help='Number of batches for dataset', required=False,type=int, default=10)
+    ap.add_argument('-s', '--simple',
+                    help='Use simple templates', action='store_true',required=False, default=False)
+    
     args = vars(ap.parse_args())
     return args
 
@@ -45,7 +51,7 @@ rkrb.DisableLog('rdApp.error')
 args = get_arguments()
 
 FINGERPRINT_SIZE = args['bitsize']
-
+N_BATCHES = args['nbatches']
 DATASETS = args['datasets']
 if args['datasets'][0] == 'all':
     DATASETS = os.listdir('ord-data/data/')
@@ -53,12 +59,13 @@ print('Loading data...')
 total_files = [f'ord-data/data/{DATASET}/{DFILE}' for DATASET in DATASETS for DFILE in os.listdir(f'ord-data/data/{DATASET}/')]
 print('Loaded file names.')
 # print(total_files)
-open(TRAINING_PATH + 'NET_SET', 'wb').write(b'')
+for i in range(N_BATCHES):
+    open(TRAINING_PATH + f'NET_SET{i}', 'wb').write(b'')
 print('Cleared file.')
 print('Loading reactions...')
 counter = 0
 rxn_to_id = dict()
-for l in open('TRAINING_DATA/REACTIONS'):
+for l in open(f'TRAINING_DATA/REACTIONS{"_SIMPLE" if args["simple"] else ""}'):
     rxn_hashed = l.strip()
     rxn_to_id[rxn_hashed] = counter
     counter += 1
@@ -76,7 +83,7 @@ def process_rxn(reaction):
             og_rxn = Reactions.ReactionFromSmarts(preprocessed, useSmiles=True)
             # print()
             # start = time.time()
-            rxn_corestr, rxn_smarts = corify(preprocessed, smarts=True)
+            rxn_corestr, rxn_smarts = corify(preprocessed, smarts=True, simple=args['simple'])
             # print('PREPROCESSED', preprocessed,'CORE_STR', rxn_corestr)
             # print(time.time() - start)
             # print('PROCESSED', rxn_corestr)
@@ -89,26 +96,30 @@ def process_rxn(reaction):
             import sys
             sys.exit(0)
         except:
+            traceback.print_exc()
             continue
     return DATASET_DICT
 
 BATCH_SIZE = args['batchsize']
-num_cores = multiprocessing.cpu_count()
 
+num_cores = multiprocessing.cpu_count()
+NET_SETS = [csv.writer(open(TRAINING_PATH + f'NET_SET{i}', 'a'), delimiter='\t') for i in range(N_BATCHES)]
 for batchid, filenames in enumerate([total_files[i*BATCH_SIZE:min((i+1)*BATCH_SIZE, len(total_files))] for i in range(math.ceil(len(total_files)/BATCH_SIZE))]):
     total_reactions = list(itertools.chain.from_iterable(map(file_to_rxns, filenames)))
     print(f'Loaded batch {batchid} into memory')
     all_datapoints = Parallel(n_jobs=num_cores, verbose=3)(delayed(process_rxn)(i) for i in total_reactions)
-    print(len(all_datapoints))
+    # print(len(all_datapoints))
     start_time = time.time()
-    NET_SET = open(TRAINING_PATH + 'NET_SET', 'ab')
     COLLECTIVE_DICT = defaultdict(list)
+    counter = 0
+    random.shuffle(all_datapoints)
     for datapoint in all_datapoints:
         for idx, v in datapoint.items():
             if idx in rxn_to_id:
                 for case in v:
-                    NET_SET.write(case + b'|' + bytes(str(rxn_to_id[idx]), encoding='utf-8') + b'\n')
-                    
+                    b64case = base64.b64encode(case).decode('utf-8')
+                    NET_SETS[counter % N_BATCHES].writerow([b64case, str(rxn_to_id[idx])])
+                    counter += 1
 # DATASET_DICT = functools.reduce(lambda x, y: defaultdict(list, [(idx, x[idx] + y[idx]) for idx in set(y.keys()).union(set(x.keys())) if idx in rxn_to_id]), all_datapoints)
 # NEW_DATASET = [case + b'|' + bytes(str(rxn_to_id[idx]), encoding='utf-8') + b'\n' for idx, data in DATASET_DICT.items() for case in data]
 # print(NEW_DATASET)

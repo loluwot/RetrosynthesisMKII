@@ -25,14 +25,15 @@ from mol_utils import *
 from collections import defaultdict
 import time
 import networkx as nx
-THRESHOLD = 2
+import pickle
+THRESHOLD = 1.75
 DEPTH_LIMIT = 5
 scorer = SCScorer()
 scorer.restore('./full_reaxys_model_1024bool/model.ckpt-10654.as_numpy.json.gz')
 EXPLORATION_CONSTANT = 3
 SOLVE_REWARD = 10
-EXPANSION_WIDTH = 15
-ROLLOUT_WIDTH = 15
+EXPANSION_WIDTH = 10
+ROLLOUT_WIDTH = 5
 MAX_DEPTH = 25
 DAMPENING = 0.99
 
@@ -70,7 +71,9 @@ class State:
 
     #"dead end" terminal occurs when ANY molecule is a dead end
     def is_terminal(self): #1 if "solved" terminal, -1 if dead end terminal, fraction of solved molecules if not terminal
+        # start_time = time.time()
         actions = self.get_actions()
+        # print('ROLLOUT TIME', time.time() - start_time)
         counts = defaultdict(int)
         for action in actions:
             counts[action[1]] += 1
@@ -116,7 +119,7 @@ class State:
         last_action = 1 if self.parent_state is None else self.parent_state.action_counts[self.parent_action]
         return self.action_scores[action]/self.action_counts[action] + EXPLORATION_CONSTANT*prob*math.sqrt(last_action)/(1 + self.action_counts[action])
 
-    def get_actions(self):
+    def get_actions(self, use_filter=False):
         if self.actions is not None:
             return self.actions
         net_actions = []
@@ -124,7 +127,7 @@ class State:
         for mol in self.molecules:
             if mol.is_solved():
                 continue
-            actions = get_top_n(mol.molstr, topn=EXPANSION_WIDTH)
+            actions = get_top_n(mol.molstr, topn=EXPANSION_WIDTH, nbits=4096, use_filter=use_filter)
             if len(actions) == 0:
                 continue
             actions, results = zip(*actions)
@@ -153,13 +156,13 @@ class State:
             self.do_action(action)
         return self.children[max(actions, key=lambda x: x[0][1])]
 
-    def rollout(self, depth=0):
+    def rollout(self, depth=0, MAX_DEPTH=MAX_DEPTH, select_random=True):
         terminality = self.is_terminal()
         if abs(terminality) == 1 or self.depth > MAX_DEPTH:
-            return terminality*SOLVE_REWARD if terminality > 0 else terminality, self
+            return (terminality*SOLVE_REWARD if terminality > 0 else terminality), self
         if depth >= DEPTH_LIMIT:
             return terminality, self
-        new_state = self.do_action(random.choice(self.get_actions()[:ROLLOUT_WIDTH]), virtual=True)
+        new_state = self.do_action(random.choice(self.get_actions()[:(ROLLOUT_WIDTH-1)*int(select_random) + 1]), virtual=True)
         return new_state.rollout(depth=depth+1)
 
     def get_branch_props(self, length=0, confidence=0):
@@ -188,10 +191,13 @@ class State:
         weight = max(0, (MAX_DEPTH - temp)/MAX_DEPTH)
         print(f'FINAL REWARD: ', reward*weight)
         leaf.backprop(reward*weight)
+        if term.is_terminal() == 1:
+            print(f'POTENTIAL PATHWAY')
+            return reward*weight, term
 
     def get_synthesis(self):
         best = self.select()
-        print('IS LEAF?', best.is_leaf())
+        _, best = best.rollout(MAX_DEPTH=math.inf, select_random=False)
         if best.is_terminal() == 1:
             print('SOLVED')
             return best
@@ -216,8 +222,15 @@ class State:
         fig.set_size_inches(100, 30)
         fig.savefig(filename, dpi=200)
 
+    def get_synthesis_list(self, cur_list = [], reactions = []):
+        cur_list.append(self)
+        if self.parent_state is None:
+            return cur_list, reactions
+        reactions.append(self.parent_action)
+        return self.parent_state.get_synthesis_list(cur_list=cur_list, reactions=reactions)
 
-
-
+    def save(self, filename='tree'):
+        f = open(filename+'.pkl', 'wb')
+        pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 

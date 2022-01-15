@@ -12,4 +12,8 @@ tester*.py
 inscope_model*
 model
 model1
+model2048*
+model4096*
+model8000*
+checkpoints
 test_model.py
